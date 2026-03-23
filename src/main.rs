@@ -12,42 +12,36 @@ fn main() {
 
     let bid1 = LimitOrder {
         time_placed: Local::now(),
-        stock_symbol: String::from("GOOGL"),
         limit_price: dec!(1234.5600),
         quantity: dec!(50),
         side: Side::Buy,
     };
     let bid2 = LimitOrder {
         time_placed: Local::now(),
-        stock_symbol: String::from("GOOGL"),
         limit_price: dec!(1234.5600),
         quantity: dec!(50),
         side: Side::Buy,
     };
     let bid3 = LimitOrder {
         time_placed: Local::now(),
-        stock_symbol: String::from("GOOGL"),
         limit_price: dec!(1234.5320),
         quantity: dec!(50),
         side: Side::Buy,
     };
     let ask1 = LimitOrder {
         time_placed: Local::now(),
-        stock_symbol: String::from("AAPL"),
         limit_price: dec!(1123.5698),
         quantity: dec!(50),
         side: Side::Sell,
     };
     let ask2 = LimitOrder {
         time_placed: Local::now(),
-        stock_symbol: String::from("AAPL"),
         limit_price: dec!(1123.5696),
         quantity: dec!(50),
         side: Side::Sell,
     };
     let ask3 = LimitOrder {
         time_placed: Local::now(),
-        stock_symbol: String::from("AAPL"),
         limit_price: dec!(1123.5698),
         quantity: dec!(50),
         side: Side::Sell,

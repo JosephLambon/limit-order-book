@@ -32,22 +32,10 @@ impl OrderBook {
         order_book_side: &mut BTreeMap<Decimal, VecDeque<LimitOrder>>,
         limit_order: LimitOrder,
     ) {
-        let order_price_exists = order_book_side.contains_key(&limit_order.limit_price);
-
-        match order_price_exists {
-            false => {
-                order_book_side.insert(limit_order.limit_price, VecDeque::from([limit_order]));
-            }
-            true => {
-                let existing_queue = order_book_side.get_mut(&limit_order.limit_price);
-
-                if let Some(queue) = existing_queue {
-                    queue.push_back(limit_order);
-                } else {
-                    eprintln!("Unable to fetch existing queue.");
-                }
-            }
-        }
+        order_book_side
+            .entry(limit_order.limit_price)
+            .or_default()
+            .push_back(limit_order);
 
         println!("Updated Order Book Side: {:#?}\n", order_book_side);
     }
@@ -62,7 +50,6 @@ impl Default for OrderBook {
 #[derive(Debug, Clone)]
 pub struct LimitOrder {
     pub time_placed: DateTime<Local>,
-    pub stock_symbol: String,
     pub limit_price: Decimal,
     pub quantity: Decimal,
     pub side: Side,
