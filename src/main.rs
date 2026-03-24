@@ -1,12 +1,18 @@
 pub mod book;
 use book::*;
 
+use tracing::{Level, info};
+
 use chrono::Local;
 use rust_decimal::dec;
 
 fn main() {
-    println!("\nWelcome. This is Joe's Order Book.");
-    println!("==================================\n\n");
+    tracing_subscriber::fmt::fmt()
+        .with_max_level(Level::TRACE)
+        .init();
+
+    info!("Welcome. This is Joe's Order Book.");
+    info!("==================================\n\n");
 
     let mut order_book = OrderBook::new();
 

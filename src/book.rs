@@ -1,9 +1,12 @@
 use std::collections::{BTreeMap, VecDeque};
 
+use tracing::{Level, debug, trace, instrument};
+
 use rust_decimal::Decimal;
 
 use chrono::prelude::*;
 
+#[derive(Debug)]
 pub struct OrderBook {
     pub asks: BTreeMap<Decimal, VecDeque<LimitOrder>>,
     pub bids: BTreeMap<Decimal, VecDeque<LimitOrder>>,
@@ -17,7 +20,14 @@ impl OrderBook {
         }
     }
 
+    #[instrument(level = Level::DEBUG, skip_all)]
     pub fn insert(&mut self, limit_order: LimitOrder) {
+        debug!(
+            price = %limit_order.limit_price,
+            quantity = %limit_order.quantity,
+            side = ?limit_order.side,
+            "Inserting to order book",
+        );
         match limit_order.side {
             Side::Buy => {
                 OrderBook::push_back_or_create_price_level(&mut self.bids, limit_order);
@@ -28,16 +38,19 @@ impl OrderBook {
         }
     }
 
+    #[instrument(level = Level::TRACE, skip_all)]
     fn push_back_or_create_price_level(
         order_book_side: &mut BTreeMap<Decimal, VecDeque<LimitOrder>>,
         limit_order: LimitOrder,
     ) {
+        trace!(
+            price_level = %limit_order.limit_price,
+            "Pushing to price level"
+        );
         order_book_side
             .entry(limit_order.limit_price)
             .or_default()
             .push_back(limit_order);
-
-        println!("Updated Order Book Side: {:#?}\n", order_book_side);
     }
 }
 
