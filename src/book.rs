@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, VecDeque};
 
-use tracing::{Level, debug, trace, instrument};
+use tracing::{Level, debug, instrument, trace};
 
 use rust_decimal::Decimal;
 
@@ -26,7 +26,7 @@ impl OrderBook {
             price = %limit_order.limit_price,
             quantity = %limit_order.quantity,
             side = ?limit_order.side,
-            "Inserting to order book",
+            "Inserting order ID to order book"
         );
         match limit_order.side {
             Side::Buy => {
@@ -45,7 +45,8 @@ impl OrderBook {
     ) {
         trace!(
             price_level = %limit_order.limit_price,
-            "Pushing to price level"
+            order_id = %limit_order.id,
+            "Pushing order to price level"
         );
         order_book_side
             .entry(limit_order.limit_price)
@@ -62,6 +63,7 @@ impl Default for OrderBook {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct LimitOrder {
+    pub id: u64,
     pub time_placed: DateTime<Local>,
     pub limit_price: Decimal,
     pub quantity: Decimal,
@@ -91,12 +93,14 @@ mod tests {
     #[test]
     fn insert_adds_buy_side_orders_to_bids() {
         let bid1 = LimitOrder {
+            id: 1,
             limit_price: dec!(1200.2134),
             quantity: dec!(10),
             time_placed: Local::now(),
             side: Side::Buy,
         };
         let bid2 = LimitOrder {
+            id: 2,
             limit_price: dec!(1200.2136),
             quantity: dec!(10),
             time_placed: Local::now(),
@@ -117,12 +121,14 @@ mod tests {
     #[test]
     fn insert_updates_bid_queue_for_existing_price_level() {
         let bid1 = LimitOrder {
+            id: 1,
             limit_price: dec!(1200.2134),
             quantity: dec!(10),
             time_placed: Local::now(),
             side: Side::Buy,
         };
         let bid2 = LimitOrder {
+            id: 2,
             limit_price: dec!(1200.2134),
             quantity: dec!(10),
             time_placed: Local::now(),
@@ -143,12 +149,14 @@ mod tests {
     #[test]
     fn insert_adds_sell_side_orders_to_asks() {
         let ask1 = LimitOrder {
+            id: 1,
             limit_price: dec!(1200.2134),
             quantity: dec!(10),
             time_placed: Local::now(),
             side: Side::Sell,
         };
         let ask2 = LimitOrder {
+            id: 2,
             limit_price: dec!(1200.2136),
             quantity: dec!(10),
             time_placed: Local::now(),
@@ -169,12 +177,14 @@ mod tests {
     #[test]
     fn insert_updates_ask_queue_for_existing_price_level() {
         let ask1 = LimitOrder {
+            id: 1,
             limit_price: dec!(1200.2134),
             quantity: dec!(10),
             time_placed: Local::now(),
             side: Side::Sell,
         };
         let ask2 = LimitOrder {
+            id: 2,
             limit_price: dec!(1200.2134),
             quantity: dec!(10),
             time_placed: Local::now(),
@@ -196,12 +206,14 @@ mod tests {
     #[test]
     fn insert_routes_buy_and_sell_orders_to_correct_sides() {
         let bid = LimitOrder {
+            id: 1,
             limit_price: dec!(1200.2134),
             quantity: dec!(10),
             time_placed: Local::now(),
             side: Side::Buy,
         };
         let ask = LimitOrder {
+            id: 2,
             limit_price: dec!(1200.2136),
             quantity: dec!(10),
             time_placed: Local::now(),
@@ -234,18 +246,21 @@ mod tests {
     #[test]
     fn insert_preserves_fifo_order_within_price_level() {
         let bid1: LimitOrder = LimitOrder {
+            id: 1,
             limit_price: dec!(1200.2134),
             quantity: dec!(10),
             time_placed: Local::now(),
             side: Side::Buy,
         };
         let bid2 = LimitOrder {
+            id: 2,
             limit_price: dec!(1200.2134),
             quantity: dec!(10),
             time_placed: Local::now(),
             side: Side::Buy,
         };
         let bid3 = LimitOrder {
+            id: 3,
             limit_price: dec!(1200.2134),
             quantity: dec!(10),
             time_placed: Local::now(),

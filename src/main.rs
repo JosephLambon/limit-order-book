@@ -17,36 +17,42 @@ fn main() {
     let mut order_book = OrderBook::new();
 
     let bid1 = LimitOrder {
+        id: 1,
         time_placed: Local::now(),
         limit_price: dec!(1234.5600),
         quantity: dec!(50),
         side: Side::Buy,
     };
     let bid2 = LimitOrder {
+        id: 2,
         time_placed: Local::now(),
         limit_price: dec!(1234.5600),
         quantity: dec!(50),
         side: Side::Buy,
     };
     let bid3 = LimitOrder {
+        id: 3,
         time_placed: Local::now(),
         limit_price: dec!(1234.5320),
         quantity: dec!(50),
         side: Side::Buy,
     };
     let ask1 = LimitOrder {
+        id: 4,
         time_placed: Local::now(),
         limit_price: dec!(1123.5698),
         quantity: dec!(50),
         side: Side::Sell,
     };
     let ask2 = LimitOrder {
+        id: 5,
         time_placed: Local::now(),
         limit_price: dec!(1123.5696),
         quantity: dec!(50),
         side: Side::Sell,
     };
     let ask3 = LimitOrder {
+        id: 6,
         time_placed: Local::now(),
         limit_price: dec!(1123.5698),
         quantity: dec!(50),
