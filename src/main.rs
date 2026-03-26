@@ -1,11 +1,16 @@
 pub mod book;
 mod engine;
+use std::{process, thread};
+
 use book::*;
 
 use tracing::{Level, info, trace};
 
-use chrono::Local;
+use core::time::Duration;
+use chrono::{Local};
 use rust_decimal::dec;
+
+use engine::*;
 
 fn main() {
     tracing_subscriber::fmt::fmt()
@@ -15,7 +20,9 @@ fn main() {
     info!("Welcome. This is Joe's Order Book.");
     info!("==================================\n\n");
 
-    let mut order_book = OrderBook::new();
+    let mut engine = Engine::new();
+    engine.add_instrument(InstrumentKey::Btc);
+    engine.add_instrument(InstrumentKey::Eth);
 
     let bid1 = LimitOrder {
         id: 1,
@@ -60,14 +67,27 @@ fn main() {
         side: Side::Sell,
     };
 
-    trace!(match_exists = order_book.check_match());
+    let tx_btc = engine.senders.get(&InstrumentKey::Btc)
+        .unwrap_or_else(|| { process::exit(1) })
+        .clone();
 
-    order_book.insert(bid1);
-    order_book.insert(bid2);
-    order_book.insert(bid3);
-    order_book.insert(ask1);
-    order_book.insert(ask2);
-    order_book.insert(ask3);
+    let tx_eth = engine.senders.get(&InstrumentKey::Eth)
+        .unwrap_or_else(|| { process::exit(1) })
+        .clone();
 
-    trace!(match_exists = order_book.check_match());
+    tx_btc.send(bid1.clone());
+    tx_btc.send(bid2.clone());
+    tx_btc.send(bid3.clone());
+    tx_btc.send(ask1.clone());
+    tx_btc.send(ask2.clone());
+    tx_btc.send(ask3.clone());
+
+    tx_eth.send(bid1);
+    tx_eth.send(bid2);
+    tx_eth.send(bid3);
+    tx_eth.send(ask1);
+    tx_eth.send(ask2);
+    tx_eth.send(ask3);
+
+    thread::sleep(Duration::from_secs(10));
 }
