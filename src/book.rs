@@ -22,6 +22,23 @@ impl OrderBook {
     }
 
     #[instrument(level = Level::DEBUG, skip_all)]
+    pub fn check_match(&self) -> bool {
+        debug!("Checking for match");
+        let Some(lowest_ask) = self.asks.first_key_value() else {
+            return false;
+        };
+        let Some(highest_bid) = self.bids.last_key_value() else {
+            return false;
+        };
+
+        debug!(
+            bid = %highest_bid.0,
+            ask = %lowest_ask.0,
+        );
+        highest_bid.0 >= lowest_ask.0
+    }
+
+    #[instrument(level = Level::DEBUG, skip_all)]
     pub fn insert(&mut self, limit_order: LimitOrder) {
         debug!(
             price = %limit_order.limit_price,
@@ -283,5 +300,121 @@ mod tests {
             &bid3
         );
         assert_eq!(order_book.bids.get(&dec!(1200.2134)).unwrap(), &expected);
+    }
+
+    #[test]
+    fn check_match_bid_above_ask() {
+        let bid: LimitOrder = LimitOrder {
+            id: 1,
+            limit_price: dec!(1200.2134),
+            quantity: dec!(10),
+            time_placed: Local::now(),
+            side: Side::Buy,
+        };
+        let ask = LimitOrder {
+            id: 3,
+            limit_price: dec!(1200.2133),
+            quantity: dec!(10),
+            time_placed: Local::now(),
+            side: Side::Sell,
+        };
+
+        let mut order_book = OrderBook::new();
+
+        order_book.insert(bid);
+        order_book.insert(ask);
+
+        assert!(order_book.check_match());
+    }
+
+    #[test]
+    fn check_match_bid_matching_ask() {
+        let bid: LimitOrder = LimitOrder {
+            id: 1,
+            limit_price: dec!(1200.2133),
+            quantity: dec!(10),
+            time_placed: Local::now(),
+            side: Side::Buy,
+        };
+        let ask = LimitOrder {
+            id: 3,
+            limit_price: dec!(1200.2133),
+            quantity: dec!(10),
+            time_placed: Local::now(),
+            side: Side::Sell,
+        };
+
+        let mut order_book = OrderBook::new();
+
+        order_book.insert(bid);
+        order_book.insert(ask);
+
+        assert!(order_book.check_match());
+    }
+
+    #[test]
+    fn check_match_bid_below_ask() {
+        let bid: LimitOrder = LimitOrder {
+            id: 1,
+            limit_price: dec!(1200.2132),
+            quantity: dec!(10),
+            time_placed: Local::now(),
+            side: Side::Buy,
+        };
+        let ask = LimitOrder {
+            id: 3,
+            limit_price: dec!(1200.2133),
+            quantity: dec!(10),
+            time_placed: Local::now(),
+            side: Side::Sell,
+        };
+
+        let mut order_book = OrderBook::new();
+
+        order_book.insert(bid);
+        order_book.insert(ask);
+
+        assert!(!order_book.check_match());
+    }
+
+    #[test]
+    fn check_match_no_bids() {
+        let ask = LimitOrder {
+            id: 3,
+            limit_price: dec!(1200.2133),
+            quantity: dec!(10),
+            time_placed: Local::now(),
+            side: Side::Sell,
+        };
+
+        let mut order_book = OrderBook::new();
+
+        order_book.insert(ask);
+
+        assert!(!order_book.check_match());
+    }
+
+    #[test]
+    fn check_match_no_asks() {
+        let ask = LimitOrder {
+            id: 3,
+            limit_price: dec!(1200.2133),
+            quantity: dec!(10),
+            time_placed: Local::now(),
+            side: Side::Sell,
+        };
+
+        let mut order_book = OrderBook::new();
+
+        order_book.insert(ask);
+
+        assert!(!order_book.check_match());
+    }
+
+    #[test]
+    fn check_match_empty_order_book() {
+        let order_book = OrderBook::new();
+
+        assert!(!order_book.check_match());
     }
 }

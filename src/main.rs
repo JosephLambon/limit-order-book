@@ -1,7 +1,8 @@
 pub mod book;
+mod engine;
 use book::*;
 
-use tracing::{Level, info};
+use tracing::{Level, info, trace};
 
 use chrono::Local;
 use rust_decimal::dec;
@@ -59,10 +60,14 @@ fn main() {
         side: Side::Sell,
     };
 
+    trace!(match_exists = order_book.check_match());
+
     order_book.insert(bid1);
     order_book.insert(bid2);
     order_book.insert(bid3);
     order_book.insert(ask1);
     order_book.insert(ask2);
     order_book.insert(ask3);
+
+    trace!(match_exists = order_book.check_match());
 }
