@@ -2,12 +2,14 @@ pub mod book;
 mod engine;
 use std::{process, thread};
 
+use tokio::runtime::Runtime;
+
 use book::*;
 
-use tracing::{Level, info, trace};
+use tracing::{Level, info};
 
+use chrono::Local;
 use core::time::Duration;
-use chrono::{Local};
 use rust_decimal::dec;
 
 use engine::*;
@@ -16,6 +18,8 @@ fn main() {
     tracing_subscriber::fmt::fmt()
         .with_max_level(Level::TRACE)
         .init();
+
+    let rt = Runtime::new().unwrap();
 
     info!("Welcome. This is Joe's Order Book.");
     info!("==================================\n\n");
@@ -67,27 +71,48 @@ fn main() {
         side: Side::Sell,
     };
 
-    let tx_btc = engine.senders.get(&InstrumentKey::Btc)
-        .unwrap_or_else(|| { process::exit(1) })
+    let tx_btc = engine
+        .senders
+        .get(&InstrumentKey::Btc)
+        .unwrap_or_else(|| process::exit(1))
         .clone();
 
-    let tx_eth = engine.senders.get(&InstrumentKey::Eth)
-        .unwrap_or_else(|| { process::exit(1) })
+    let tx_eth = engine
+        .senders
+        .get(&InstrumentKey::Eth)
+        .unwrap_or_else(|| process::exit(1))
         .clone();
 
-    tx_btc.send(bid1.clone());
-    tx_btc.send(bid2.clone());
-    tx_btc.send(bid3.clone());
-    tx_btc.send(ask1.clone());
-    tx_btc.send(ask2.clone());
-    tx_btc.send(ask3.clone());
+    let bids_btc = [bid1, bid2, bid3];
+    let asks_btc = [ask1, ask2, ask3];
 
-    tx_eth.send(bid1);
-    tx_eth.send(bid2);
-    tx_eth.send(bid3);
-    tx_eth.send(ask1);
-    tx_eth.send(ask2);
-    tx_eth.send(ask3);
+    let bids_eth = bids_btc.clone();
+    let asks_eth = asks_btc.clone();
+
+    let btc = async move {
+        for bid in bids_btc {
+            let _ = tx_btc.send(bid.clone());
+        }
+
+        for ask in asks_btc {
+            let _ = tx_btc.send(ask.clone());
+        }
+    };
+
+    let eth = async move {
+        for bid in bids_eth {
+            let _ = tx_eth.send(bid.clone());
+        }
+
+        for ask in asks_eth {
+            let _ = tx_eth.send(ask.clone());
+        }
+    };
+
+    info!("\n\nSPAWNING THREADS!\n");
+    rt.spawn(btc);
+    rt.spawn(eth);
 
     thread::sleep(Duration::from_secs(10));
+    info!("\n\nShutting down\n");
 }
