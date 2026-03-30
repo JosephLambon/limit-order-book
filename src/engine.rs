@@ -4,9 +4,17 @@ use std::{
     thread,
 };
 
+use chrono::Local;
+use rust_decimal::dec;
 use tracing::info;
 
-use crate::book::{LimitOrder, OrderBook};
+use crate::book::OrderBook;
+
+pub mod event;
+use event::*;
+
+// Re-export
+pub use event::Command;
 
 #[derive(Eq, PartialEq, Hash)]
 pub enum InstrumentKey {
@@ -15,7 +23,7 @@ pub enum InstrumentKey {
 }
 
 pub struct Engine {
-    pub senders: HashMap<InstrumentKey, mpsc::Sender<LimitOrder>>,
+    pub senders: HashMap<InstrumentKey, mpsc::Sender<Command>>,
 }
 
 impl Engine {
@@ -27,19 +35,66 @@ impl Engine {
 
     pub fn add_instrument(&mut self, ticker_symbol: InstrumentKey) {
         if let Entry::Vacant(entry) = self.senders.entry(ticker_symbol) {
-            let (tx, rx) = mpsc::channel::<LimitOrder>();
+            let (tx, rx) = mpsc::channel::<Command>();
 
             entry.insert(tx);
 
-            // Listen for orders until channel closes
+            // Listen for commands until shutdown
             thread::spawn(move || {
                 let mut order_book = OrderBook::new();
+                let mut temporary_audit_log: Vec<Event> = vec![];
 
-                while let Ok(order) = rx.recv() {
-                    order_book.insert(order);
-                    if order_book.check_match() {
-                        info!("MATCH FOUND");
-                    };
+                while let Ok(command) = rx.recv() {
+                    match command {
+                        Command::PlaceOrder(order) => {
+                            // Audit log event
+                            temporary_audit_log.push(Event::OrderPlaced(OrderPlacedEvent {
+                                id: order.id,
+                                state: order.state,
+                                time_placed: order.time_placed,
+                                time_accepted: Local::now(),
+                                limit_price: order.limit_price,
+                                quantity: order.quantity,
+                                side: order.side,
+                                matched_quantity: dec!(0),
+                                remaining_quantity: order.remaining_quantity,
+                            }));
+
+                            order_book.insert(order);
+
+                            if order_book.check_match() {
+                                info!("MATCH FOUND");
+                                // Instatiate a 'OrdersMatchedEvent' struct
+
+                                // Audit log OrdersMatched event
+
+                                // Send OrdersMatchedEvent Command to
+                            };
+                        }
+                        Command::CancelOrder(order) => { 
+                            temporary_audit_log.push(Event::OrderCancelled(CancellationEvent {
+                                id: order.id,
+                                state: order.state,
+                                time_placed: order.time_placed,
+                                time_accepted: order.time_placed,
+                                time_cancelled: Local::now(),
+                                limit_price: order.limit_price,
+                                quantity: order.quantity,
+                                side: order.side,
+                                matched_quantity: dec!(0),
+                                remaining_quantity: order.remaining_quantity,
+                            }));
+                            info!("CANCELLATION PLACEHOLDER");
+                        }
+                        Command::Shutdown => {
+                            // Audit log shutdown event
+                            temporary_audit_log.push(Event::Shutdown);
+                            // Execute trade
+                            println!("\n\n THREAD CLOSING... \n\n");
+                            println!("\n\n Audit log: {:#?} \n\n", temporary_audit_log);
+                            break;
+                        }
+                    }
                 }
             });
         }

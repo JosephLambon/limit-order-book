@@ -30,45 +30,63 @@ fn main() {
 
     let bid1 = LimitOrder {
         id: 1,
+        state: order::OrderState::New,
         time_placed: Local::now(),
         limit_price: dec!(1234.5600),
         quantity: dec!(50),
         side: Side::Buy,
+        matched_quantity: dec!(0),
+        remaining_quantity: dec!(50),
     };
     let bid2 = LimitOrder {
         id: 2,
+        state: order::OrderState::New,
         time_placed: Local::now(),
         limit_price: dec!(1234.5600),
         quantity: dec!(50),
         side: Side::Buy,
+        matched_quantity: dec!(0),
+        remaining_quantity: dec!(50),
     };
     let bid3 = LimitOrder {
         id: 3,
+        state: order::OrderState::New,
         time_placed: Local::now(),
         limit_price: dec!(1234.5320),
         quantity: dec!(50),
         side: Side::Buy,
+        matched_quantity: dec!(0),
+        remaining_quantity: dec!(50),
     };
     let ask1 = LimitOrder {
         id: 4,
+        state: order::OrderState::New,
         time_placed: Local::now(),
         limit_price: dec!(1123.5698),
         quantity: dec!(50),
         side: Side::Sell,
+        matched_quantity: dec!(0),
+        remaining_quantity: dec!(50),
     };
     let ask2 = LimitOrder {
         id: 5,
+        state: order::OrderState::New,
         time_placed: Local::now(),
         limit_price: dec!(1123.5696),
         quantity: dec!(50),
         side: Side::Sell,
+        matched_quantity: dec!(0),
+        remaining_quantity: dec!(50),
     };
     let ask3 = LimitOrder {
         id: 6,
+        state: order::OrderState::New,
         time_placed: Local::now(),
         limit_price: dec!(1123.5698),
         quantity: dec!(50),
         side: Side::Sell,
+        matched_quantity: dec!(0),
+        remaining_quantity: dec!(50),
     };
 
     let tx_btc = engine
@@ -91,28 +109,37 @@ fn main() {
 
     let btc = async move {
         for bid in bids_btc {
-            let _ = tx_btc.send(bid.clone());
+            let _ = tx_btc.send(Command::PlaceOrder(bid.clone()));
         }
 
         for ask in asks_btc {
-            let _ = tx_btc.send(ask.clone());
+            let _ = tx_btc.send(Command::PlaceOrder(ask.clone()));
         }
+
+        thread::sleep(Duration::from_secs(2));
+        info!("\n\nShutting down: BTC\n");
+        let _ = tx_btc.send(Command::Shutdown);
     };
 
     let eth = async move {
         for bid in bids_eth {
-            let _ = tx_eth.send(bid.clone());
+            let _ = tx_eth.send(Command::PlaceOrder(bid.clone()));
         }
 
         for ask in asks_eth {
-            let _ = tx_eth.send(ask.clone());
+            let _ = tx_eth.send(Command::PlaceOrder(ask.clone()));
         }
+        thread::sleep(Duration::from_secs(2));
+        info!("\n\nShutting down: ETH\n");
+        let _ = tx_eth.send(Command::Shutdown);
     };
 
     info!("\n\nSPAWNING THREADS!\n");
     rt.spawn(btc);
     rt.spawn(eth);
 
-    thread::sleep(Duration::from_secs(10));
-    info!("\n\nShutting down\n");
+    thread::sleep(Duration::from_secs(5));
+
+    info!("SIMULAION COMPLETE.\n");
+    info!("===================\n\n");
 }
