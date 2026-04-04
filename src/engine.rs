@@ -1,94 +1,115 @@
 use std::{
-    collections::{HashMap, hash_map::Entry},
-    sync::mpsc,
-    thread,
+    collections::{HashMap, hash_map::Entry}, sync::mpsc, thread
 };
 
 use chrono::Local;
 use rust_decimal::dec;
-use tracing::info;
+use tracing::{debug, error};
 
-use crate::book::OrderBook;
+use crate::{book::OrderBook};
 
 pub mod event;
 use event::*;
 
 // Re-export
-pub use event::Command;
+pub use event::EngineCommand;
 
-#[derive(Eq, PartialEq, Hash)]
+#[derive(Eq, PartialEq, Clone, Copy, Hash)]
 pub enum InstrumentKey {
     Btc,
     Eth,
 }
 
 pub struct Engine {
-    pub senders: HashMap<InstrumentKey, mpsc::Sender<Command>>,
+    pub senders: HashMap<InstrumentKey, mpsc::Sender<EngineCommand>>
 }
 
 impl Engine {
     pub fn new() -> Self {
         Engine {
-            senders: HashMap::new(),
+            senders: HashMap::new()
         }
     }
 
     pub fn add_instrument(&mut self, ticker_symbol: InstrumentKey) {
         if let Entry::Vacant(entry) = self.senders.entry(ticker_symbol) {
-            let (tx, rx) = mpsc::channel::<Command>();
+            let (tx, rx) = mpsc::channel::<EngineCommand>();
 
             entry.insert(tx);
 
             // Listen for commands until shutdown
             thread::spawn(move || {
                 let mut order_book = OrderBook::new();
-                let mut temporary_audit_log: Vec<Event> = vec![];
+                let mut temporary_audit_log: Vec<EngineEvent> = vec![];
 
                 while let Ok(command) = rx.recv() {
                     match command {
-                        Command::PlaceOrder(order) => {
+                        EngineCommand::PlaceOrder(order) => {
                             // Audit log event
-                            temporary_audit_log.push(Event::OrderPlaced(OrderPlacedEvent {
+                            temporary_audit_log.push(EngineEvent::OrderPlaced(OrderPlacedEvent {
                                 id: order.id,
                                 state: order.state,
-                                time_placed: order.time_placed,
-                                time_accepted: Local::now(),
+                                placed_at: order.placed_at,
+                                accepted_at: Local::now(),
                                 limit_price: order.limit_price,
                                 quantity: order.quantity,
                                 side: order.side,
-                                matched_quantity: dec!(0),
-                                remaining_quantity: order.remaining_quantity,
+                                quantity_traded: dec!(0),
+                                quantity_remaining: order.quantity_remaining,
                             }));
 
                             order_book.insert(order);
 
-                            if order_book.check_match() {
-                                info!("MATCH FOUND");
-                                // Instatiate a 'OrdersMatchedEvent' struct
+                            while let Some(result) = order_book.match_sides() {
+                                debug!("Match found.");
+                                order_book.orders_placed += 1;
 
+                                let match_event = EngineEvent::OrdersMatched(
+                                    OrdersMatchedEvent {
+                                        id: order_book.orders_placed,
+                                        matched_at: Local::now(),
+                                        ask_id: result.ask_id,
+                                        bid_id: result.bid_id,
+                                        ask_price: result.ask_price,
+                                    }
+                                );
+                                
                                 // Audit log OrdersMatched event
+                                temporary_audit_log.push(match_event.clone());
 
-                                // Send OrdersMatchedEvent Command to
+                                // Send OrdersMatchedEvent EngineCommand to executor
+                                let result = order_book.process(&match_event);
+
+                                // IF result success, add to temp log.
+                                if let Ok(event) = result {
+                                    debug!("Trade successfully executed.");
+                                    temporary_audit_log.push(event);
+                                } else {
+                                    //  error handling
+                                    error!("Unable to execute trade.");
+                                }
                             };
                         }
-                        Command::CancelOrder(order) => { 
-                            temporary_audit_log.push(Event::OrderCancelled(CancellationEvent {
-                                id: order.id,
-                                state: order.state,
-                                time_placed: order.time_placed,
-                                time_accepted: order.time_placed,
-                                time_cancelled: Local::now(),
-                                limit_price: order.limit_price,
-                                quantity: order.quantity,
-                                side: order.side,
-                                matched_quantity: dec!(0),
-                                remaining_quantity: order.remaining_quantity,
-                            }));
-                            info!("CANCELLATION PLACEHOLDER");
+                        EngineCommand::CancelOrder(order) => {
+                            temporary_audit_log.push(EngineEvent::OrderCancelled(
+                                CancellationEvent {
+                                    id: order.id,
+                                    state: order.state,
+                                    placed_at: order.placed_at,
+                                    accepted_at: order.placed_at,
+                                    cancelled_at: Local::now(),
+                                    limit_price: order.limit_price,
+                                    quantity: order.quantity,
+                                    side: order.side,
+                                    quantity_traded: dec!(0),
+                                    quantity_remaining: order.quantity_remaining,
+                                },
+                            ));
+                            debug!("CANCELLATION PLACEHOLDER");
                         }
-                        Command::Shutdown => {
+                        EngineCommand::Shutdown => {
                             // Audit log shutdown event
-                            temporary_audit_log.push(Event::Shutdown);
+                            temporary_audit_log.push(EngineEvent::Shutdown);
                             // Execute trade
                             println!("\n\n THREAD CLOSING... \n\n");
                             println!("\n\n Audit log: {:#?} \n\n", temporary_audit_log);
@@ -117,6 +138,8 @@ mod tests {
     }
 
     #[test]
+
+
     fn add_instrument_does_not_overwrite_existing() {
         let mut engine = Engine::new();
 

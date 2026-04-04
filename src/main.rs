@@ -1,5 +1,8 @@
+// Declare book module
 pub mod book;
+
 mod engine;
+
 use std::{process, thread};
 
 use tokio::runtime::Runtime;
@@ -31,62 +34,62 @@ fn main() {
     let bid1 = LimitOrder {
         id: 1,
         state: order::OrderState::New,
-        time_placed: Local::now(),
+        placed_at: Local::now(),
         limit_price: dec!(1234.5600),
         quantity: dec!(50),
         side: Side::Buy,
-        matched_quantity: dec!(0),
-        remaining_quantity: dec!(50),
+        quantity_traded: dec!(0),
+        quantity_remaining: dec!(50),
     };
     let bid2 = LimitOrder {
         id: 2,
         state: order::OrderState::New,
-        time_placed: Local::now(),
+        placed_at: Local::now(),
         limit_price: dec!(1234.5600),
         quantity: dec!(50),
         side: Side::Buy,
-        matched_quantity: dec!(0),
-        remaining_quantity: dec!(50),
+        quantity_traded: dec!(0),
+        quantity_remaining: dec!(50),
     };
     let bid3 = LimitOrder {
         id: 3,
         state: order::OrderState::New,
-        time_placed: Local::now(),
+        placed_at: Local::now(),
         limit_price: dec!(1234.5320),
         quantity: dec!(50),
         side: Side::Buy,
-        matched_quantity: dec!(0),
-        remaining_quantity: dec!(50),
+        quantity_traded: dec!(0),
+        quantity_remaining: dec!(50),
     };
     let ask1 = LimitOrder {
         id: 4,
         state: order::OrderState::New,
-        time_placed: Local::now(),
+        placed_at: Local::now(),
         limit_price: dec!(1123.5698),
         quantity: dec!(50),
         side: Side::Sell,
-        matched_quantity: dec!(0),
-        remaining_quantity: dec!(50),
+        quantity_traded: dec!(0),
+        quantity_remaining: dec!(50),
     };
     let ask2 = LimitOrder {
         id: 5,
         state: order::OrderState::New,
-        time_placed: Local::now(),
+        placed_at: Local::now(),
         limit_price: dec!(1123.5696),
         quantity: dec!(50),
         side: Side::Sell,
-        matched_quantity: dec!(0),
-        remaining_quantity: dec!(50),
+        quantity_traded: dec!(0),
+        quantity_remaining: dec!(50),
     };
     let ask3 = LimitOrder {
         id: 6,
         state: order::OrderState::New,
-        time_placed: Local::now(),
+        placed_at: Local::now(),
         limit_price: dec!(1123.5698),
         quantity: dec!(50),
         side: Side::Sell,
-        matched_quantity: dec!(0),
-        remaining_quantity: dec!(50),
+        quantity_traded: dec!(0),
+        quantity_remaining: dec!(50),
     };
 
     let tx_btc = engine
@@ -109,29 +112,29 @@ fn main() {
 
     let btc = async move {
         for bid in bids_btc {
-            let _ = tx_btc.send(Command::PlaceOrder(bid.clone()));
+            let _ = tx_btc.send(EngineCommand::PlaceOrder(bid.clone()));
         }
 
         for ask in asks_btc {
-            let _ = tx_btc.send(Command::PlaceOrder(ask.clone()));
+            let _ = tx_btc.send(EngineCommand::PlaceOrder(ask.clone()));
         }
 
         thread::sleep(Duration::from_secs(2));
         info!("\n\nShutting down: BTC\n");
-        let _ = tx_btc.send(Command::Shutdown);
+        let _ = tx_btc.send(EngineCommand::Shutdown);
     };
 
     let eth = async move {
         for bid in bids_eth {
-            let _ = tx_eth.send(Command::PlaceOrder(bid.clone()));
+            let _ = tx_eth.send(EngineCommand::PlaceOrder(bid.clone()));
         }
 
         for ask in asks_eth {
-            let _ = tx_eth.send(Command::PlaceOrder(ask.clone()));
+            let _ = tx_eth.send(EngineCommand::PlaceOrder(ask.clone()));
         }
         thread::sleep(Duration::from_secs(2));
         info!("\n\nShutting down: ETH\n");
-        let _ = tx_eth.send(Command::Shutdown);
+        let _ = tx_eth.send(EngineCommand::Shutdown);
     };
 
     info!("\n\nSPAWNING THREADS!\n");
