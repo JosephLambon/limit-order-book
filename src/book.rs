@@ -84,8 +84,8 @@ impl OrderBook {
 
                     // adjust quantitites
                     let quantity = Decimal::min(bid.quantity_remaining, ask.quantity_remaining);
-                    let bid_fulfilled = bid.adjust_quantities(quantity);
-                    let ask_fulfilled = ask.adjust_quantities(quantity);
+                    let bid_fulfilled = bid.adjust_quantities(quantity)?;
+                    let ask_fulfilled = ask.adjust_quantities(quantity)?;
 
                     // Remove if needed
                     if bid_fulfilled {
