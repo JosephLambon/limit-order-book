@@ -1,18 +1,21 @@
 use chrono::{DateTime, Local};
 use rust_decimal::Decimal;
 
-use crate::book::{LimitOrder, Side, order::OrderState};
+use crate::book::{LimitOrder, Side, Trade, order::OrderState};
 
-pub enum Command {
+#[derive(Debug, Clone)]
+pub enum EngineCommand {
     PlaceOrder(LimitOrder),
     CancelOrder(LimitOrder),
     Shutdown,
 }
-#[derive(Debug)]
-pub enum Event {
+
+#[derive(Debug, Clone)]
+pub enum EngineEvent {
     OrderPlaced(OrderPlacedEvent),
     OrderCancelled(CancellationEvent),
-    // OrdersMatched(OrdersMatchedEvent),
+    OrdersMatched(OrdersMatchedEvent),
+    TradeExecuted(Trade),
     Shutdown,
 }
 
@@ -20,25 +23,31 @@ pub enum Event {
 pub struct OrderPlacedEvent {
     pub id: u64,
     pub state: OrderState,
-    pub time_placed: DateTime<Local>,
-    pub time_accepted: DateTime<Local>,
+    pub placed_at: DateTime<Local>,
+    pub accepted_at: DateTime<Local>,
     pub limit_price: Decimal,
     pub quantity: Decimal,
     pub side: Side,
-    pub matched_quantity: Decimal,
-    pub remaining_quantity: Decimal,
+    pub quantity_traded: Decimal,
+    pub quantity_remaining: Decimal,
+}
+
+#[derive(Debug, Clone)]
+pub struct OrdersMatchedEvent {
+    pub id: u64,
+    pub bid_id: u64,
+    pub ask_id: u64,
+    pub ask_price: Decimal,
+    pub matched_at: DateTime<Local>,
 }
 
 #[derive(Debug, PartialEq, Clone, Eq, Hash)]
 pub struct CancellationEvent {
     pub id: u64,
-    pub state: OrderState,
-    pub time_placed: DateTime<Local>,
-    pub time_accepted: DateTime<Local>,
-    pub time_cancelled: DateTime<Local>,
+    pub cancelled_at: DateTime<Local>,
     pub limit_price: Decimal,
     pub quantity: Decimal,
     pub side: Side,
-    pub matched_quantity: Decimal,
-    pub remaining_quantity: Decimal,
+    pub quantity_traded: Decimal,
+    pub quantity_remaining: Decimal,
 }
