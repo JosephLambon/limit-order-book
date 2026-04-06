@@ -2,7 +2,7 @@ pub mod order;
 use chrono::Local;
 pub use order::{LimitOrder, Side};
 
-use crate::engine::event::EngineEvent;
+use crate::{book::order::OrderState, engine::event::EngineEvent};
 
 use std::{
     collections::{BTreeMap, VecDeque},
@@ -11,7 +11,7 @@ use std::{
 
 use tracing::{Level, debug, instrument, trace};
 
-use rust_decimal::Decimal;
+use rust_decimal::{Decimal, dec};
 
 mod trade;
 pub use trade::Trade;
@@ -24,6 +24,13 @@ pub struct OrderBook {
     pub events_processed: u64,
     pub executed_trades: u64,
     pub cancelled_trades: u64,
+}
+
+struct ExecutedTradeResult {
+    trade: Trade,
+    bid_price: Decimal,
+    bid_fulfilled: bool,
+    ask_fulfilled: bool,
 }
 
 #[derive(Debug, PartialEq)]
@@ -49,70 +56,80 @@ impl OrderBook {
     pub fn process(&mut self, event: &EngineEvent) -> Result<EngineEvent, Error> {
         match event {
             EngineEvent::OrdersMatched(matched) => {
-                let bid_queue = self.bids.get_mut(&matched.ask_price).ok_or(Error::new(
-                    ErrorKind::NotFound,
-                    "Unable to find price level on bid side",
-                ))?;
-                let bid = bid_queue.front_mut().ok_or(Error::new(
-                    ErrorKind::NotFound,
-                    "Unable to find price level on bid side",
-                ))?;
+                let executed: ExecutedTradeResult = {
+                    let bid_queue = self.bids.get_mut(&matched.ask_price).ok_or(Error::new(
+                        ErrorKind::NotFound,
+                        "Unable to find price level on bid side",
+                    ))?;
+                    let bid = bid_queue.front_mut().ok_or(Error::new(
+                        ErrorKind::NotFound,
+                        "Unable to find price level on bid side",
+                    ))?;
 
-                let ask_queue = self.asks.get_mut(&matched.ask_price).ok_or(Error::new(
-                    ErrorKind::NotFound,
-                    "Unable to find price level on ask side",
-                ))?;
-                let ask = ask_queue.front_mut().ok_or(Error::new(
-                    ErrorKind::NotFound,
-                    "Unable to find price level on bid side",
-                ))?;
+                    let ask_queue = self.asks.get_mut(&matched.ask_price).ok_or(Error::new(
+                        ErrorKind::NotFound,
+                        "Unable to find price level on ask side",
+                    ))?;
+                    let ask = ask_queue.front_mut().ok_or(Error::new(
+                        ErrorKind::NotFound,
+                        "Unable to find price level on bid side",
+                    ))?;
 
-                if !bid.is_open() || !ask.is_open() {
-                    Err(Error::new(
-                        ErrorKind::InvalidData,
-                        // Use ':?' to use the Debug formatter
-                        // Implement Display on OrderState enum to remove ':?' requirement
-                        format!(
-                            "Invalid order state. Bid: {:?}; Ask: {:?}",
-                            bid.state, ask.state
-                        ),
-                    ))
-                } else {
-                    let bid_id = bid.id;
-                    let ask_id = ask.id;
-                    let execution_price = ask.limit_price;
-
-                    // adjust quantitites
-                    let quantity = Decimal::min(bid.quantity_remaining, ask.quantity_remaining);
-                    let bid_fulfilled = bid.adjust_quantities(quantity)?;
-                    let ask_fulfilled = ask.adjust_quantities(quantity)?;
-
-                    // Remove if needed
-                    if bid_fulfilled {
-                        bid.state = order::OrderState::Fulfilled;
-                        bid_queue.pop_front();
+                    if !bid.is_open() || !ask.is_open() {
+                        return Err(Error::new(
+                            ErrorKind::InvalidData,
+                            // Use ':?' to use the Debug formatter
+                            // Implement Display on OrderState enum to remove ':?' requirement
+                            format!(
+                                "Invalid order state. Bid: {:?}; Ask: {:?}",
+                                bid.state, ask.state
+                            ),
+                        ));
                     } else {
-                        bid.state = order::OrderState::PartiallyFulfilled;
-                    }
+                        let quantity = Decimal::min(bid.quantity_remaining, ask.quantity_remaining);
 
-                    if ask_fulfilled {
-                        ask.state = order::OrderState::Fulfilled;
-                        ask_queue.pop_front();
-                    } else {
-                        ask.state = order::OrderState::PartiallyFulfilled;
-                    }
+                        let bid_fulfilled = bid.adjust_quantities(quantity)?;
+                        let ask_fulfilled = ask.adjust_quantities(quantity)?;
 
-                    self.events_processed += 1;
-                    self.executed_trades += 1;
-                    Ok(EngineEvent::TradeExecuted(Trade {
-                        trade_id: self.executed_trades,
-                        bid_order_id: bid_id,
-                        ask_order_id: ask_id,
-                        executed_at: Local::now(),
-                        execution_price,
-                        executed_quantity: quantity,
-                    }))
+                        if bid_fulfilled {
+                            bid.state = OrderState::Fulfilled
+                        } else if quantity > dec!(0) {
+                            bid.state = OrderState::PartiallyFulfilled
+                        }
+                        if ask_fulfilled {
+                            ask.state = OrderState::Fulfilled
+                        } else if quantity > dec!(0) {
+                            ask.state = OrderState::PartiallyFulfilled
+                        }
+
+                        self.executed_trades += 1;
+
+                        ExecutedTradeResult {
+                            trade: Trade {
+                                trade_id: self.executed_trades,
+                                bid_order_id: bid.id,
+                                ask_order_id: ask.id,
+                                executed_at: Local::now(),
+                                execution_price: ask.limit_price,
+                                executed_quantity: quantity,
+                            },
+                            bid_price: bid.limit_price,
+                            ask_fulfilled,
+                            bid_fulfilled,
+                        }
+                    }
+                };
+
+                // Remove if needed
+                if executed.bid_fulfilled {
+                    self.remove_front_order(&executed.bid_price, Side::Buy)?;
                 }
+                if executed.ask_fulfilled {
+                    self.remove_front_order(&executed.trade.execution_price, Side::Sell)?;
+                }
+
+                self.events_processed += 1;
+                Ok(EngineEvent::TradeExecuted(executed.trade))
             }
             EngineEvent::OrderCancelled(cancelled) => {
                 self.events_processed += 1;
@@ -189,6 +206,48 @@ impl OrderBook {
             .entry(limit_order.limit_price)
             .or_default()
             .push_back(limit_order);
+    }
+
+    #[instrument(level = Level::TRACE, skip_all)]
+    fn remove_front_order(&mut self, price_level: &Decimal, side: Side) -> Result<(), Error> {
+        let side = match side {
+            Side::Buy => &mut self.bids,
+            Side::Sell => &mut self.asks,
+        };
+
+        let queue = side.get_mut(price_level).ok_or(Error::new(
+            ErrorKind::InvalidInput,
+            "Price level does not exist.",
+        ))?;
+
+        let order = queue
+            .pop_front()
+            .ok_or(Error::new(ErrorKind::InvalidData, "Queue was empty."))?;
+
+        trace!(
+            price_level = %order.limit_price,
+            order_id = %order.id,
+            "Removing order from price level's queue"
+        );
+
+        if queue.is_empty() {
+            OrderBook::remove_price_level(side, &order.limit_price)?
+        }
+
+        Ok(())
+    }
+
+    #[instrument(level = Level::TRACE, skip_all)]
+    fn remove_price_level(
+        side: &mut BTreeMap<Decimal, VecDeque<LimitOrder>>,
+        price_level: &Decimal,
+    ) -> Result<(), Error> {
+        let _ = side.remove(price_level).ok_or(Error::new(
+            ErrorKind::InvalidInput,
+            "Price level does not exist.",
+        ))?;
+
+        Ok(())
     }
 }
 
@@ -817,8 +876,13 @@ mod tests {
     }
 
     #[test]
+    fn process_match_price_level_removed() {
+        panic!()
+    }
+
+    #[test]
     fn process_cancellation() {
-        let (mut bid, ask) = create_orders(
+        let (bid, ask) = create_orders(
             (1, 2),
             (dec!(1200.2134), dec!(1200.2134)),
             (Side::Buy, Side::Sell),
