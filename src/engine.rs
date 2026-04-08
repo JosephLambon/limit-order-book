@@ -1,12 +1,14 @@
 use std::{
-    collections::{HashMap, hash_map::Entry}, sync::mpsc, thread
+    collections::{HashMap, hash_map::Entry},
+    sync::mpsc,
+    thread,
 };
 
 use chrono::Local;
 use rust_decimal::dec;
 use tracing::{debug, error};
 
-use crate::{book::OrderBook};
+use crate::book::OrderBook;
 
 pub mod event;
 use event::*;
@@ -21,13 +23,13 @@ pub enum InstrumentKey {
 }
 
 pub struct Engine {
-    pub senders: HashMap<InstrumentKey, mpsc::Sender<EngineCommand>>
+    pub senders: HashMap<InstrumentKey, mpsc::Sender<EngineCommand>>,
 }
 
 impl Engine {
     pub fn new() -> Self {
         Engine {
-            senders: HashMap::new()
+            senders: HashMap::new(),
         }
     }
 
@@ -64,23 +66,21 @@ impl Engine {
                                 debug!("Match found.");
                                 order_book.orders_placed += 1;
 
-                                let match_event = EngineEvent::OrdersMatched(
-                                    OrdersMatchedEvent {
-                                        id: order_book.orders_placed,
-                                        matched_at: Local::now(),
-                                        ask_id: result.ask_id,
-                                        bid_id: result.bid_id,
-                                        ask_price: result.ask_price,
-                                    }
-                                );
-                                
+                                let match_event = EngineEvent::OrdersMatched(OrdersMatchedEvent {
+                                    id: order_book.orders_placed,
+                                    matched_at: Local::now(),
+                                    ask_id: result.ask_id,
+                                    bid_id: result.bid_id,
+                                    bid_price: result.bid_price,
+                                    ask_price: result.ask_price,
+                                });
+
                                 // Audit log OrdersMatched event
                                 temporary_audit_log.push(match_event.clone());
 
                                 // Send OrdersMatchedEvent EngineCommand to executor
                                 let result = order_book.process(&match_event);
 
-                                // IF result success, add to temp log.
                                 if let Ok(event) = result {
                                     debug!("Trade successfully executed.");
                                     temporary_audit_log.push(event);
@@ -88,15 +88,12 @@ impl Engine {
                                     //  error handling
                                     error!("Unable to execute trade.");
                                 }
-                            };
+                            }
                         }
                         EngineCommand::CancelOrder(order) => {
                             temporary_audit_log.push(EngineEvent::OrderCancelled(
                                 CancellationEvent {
                                     id: order.id,
-                                    state: order.state,
-                                    placed_at: order.placed_at,
-                                    accepted_at: order.placed_at,
                                     cancelled_at: Local::now(),
                                     limit_price: order.limit_price,
                                     quantity: order.quantity,
@@ -138,7 +135,6 @@ mod tests {
     }
 
     #[test]
-
 
     fn add_instrument_does_not_overwrite_existing() {
         let mut engine = Engine::new();

@@ -1,4 +1,4 @@
-use std::io::{Error, ErrorKind};
+use std::io::Error;
 
 use rust_decimal::{Decimal, dec};
 
@@ -50,6 +50,8 @@ pub enum OrderState {
 
 #[cfg(test)]
 mod tests {
+    use std::io::ErrorKind;
+
     use super::*;
 
     #[test]

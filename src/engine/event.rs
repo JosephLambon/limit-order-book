@@ -38,6 +38,7 @@ pub struct OrdersMatchedEvent {
     pub bid_id: u64,
     pub ask_id: u64,
     pub ask_price: Decimal,
+    pub bid_price: Decimal,
     pub matched_at: DateTime<Local>,
 }
 

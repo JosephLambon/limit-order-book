@@ -38,6 +38,7 @@ pub struct MatchResult {
     pub bid_id: u64,
     pub ask_id: u64,
     pub ask_price: Decimal,
+    pub bid_price: Decimal,
 }
 
 impl OrderBook {
@@ -57,7 +58,7 @@ impl OrderBook {
         match event {
             EngineEvent::OrdersMatched(matched) => {
                 let executed: ExecutedTradeResult = {
-                    let bid_queue = self.bids.get_mut(&matched.ask_price).ok_or(Error::new(
+                    let bid_queue = self.bids.get_mut(&matched.bid_price).ok_or(Error::new(
                         ErrorKind::NotFound,
                         "Unable to find price level on bid side",
                     ))?;
@@ -163,6 +164,7 @@ impl OrderBook {
             Some(MatchResult {
                 bid_id: bid.id,
                 ask_id: ask.id,
+                bid_price: bid.limit_price,
                 ask_price: ask.limit_price,
             })
         } else {
@@ -567,6 +569,7 @@ mod tests {
         let expected = MatchResult {
             ask_id: ask.id,
             bid_id: bid.id,
+            bid_price: bid.limit_price,
             ask_price: ask.limit_price,
         };
 
@@ -590,6 +593,7 @@ mod tests {
         let expected = MatchResult {
             ask_id: ask.id,
             bid_id: bid.id,
+            bid_price: bid.limit_price,
             ask_price: ask.limit_price,
         };
 
@@ -676,6 +680,7 @@ mod tests {
         let expected = MatchResult {
             ask_id: ask1.id,
             bid_id: bid1.id,
+            bid_price: bid1.limit_price,
             ask_price: ask1.limit_price,
         };
 
@@ -708,6 +713,7 @@ mod tests {
         let bid_id = bid.id;
         let ask_id = ask.id;
         let ask_price = ask.limit_price;
+        let bid_price = bid.limit_price;
 
         order_book.insert(bid);
         order_book.insert(ask);
@@ -716,6 +722,7 @@ mod tests {
             id: 1,
             bid_id: bid_id,
             ask_id: ask_id,
+            bid_price: bid_price,
             ask_price: ask_price,
             matched_at: Local::now(),
         }));
@@ -729,10 +736,7 @@ mod tests {
         assert_eq!(trade.bid_order_id, 1);
         assert_eq!(trade.execution_price, ask_price);
 
-        assert_eq!(
-            order_book.asks.get_key_value(&ask_price).unwrap().1.len(),
-            0
-        );
+        assert_eq!(order_book.asks.len(), 0);
         assert_eq!(
             order_book
                 .bids
@@ -765,6 +769,7 @@ mod tests {
         let bid_id = bid.id;
         let ask_id = ask.id;
         let ask_price = ask.limit_price;
+        let bid_price = bid.limit_price;
 
         order_book.insert(bid);
         order_book.insert(ask);
@@ -773,6 +778,7 @@ mod tests {
             id: 1,
             bid_id: bid_id,
             ask_id: ask_id,
+            bid_price: bid_price,
             ask_price: ask_price,
             matched_at: Local::now(),
         }));
@@ -786,10 +792,7 @@ mod tests {
         assert_eq!(trade.bid_order_id, 1);
         assert_eq!(trade.execution_price, ask_price);
 
-        assert_eq!(
-            order_book.asks.get_key_value(&ask_price).unwrap().1.len(),
-            0
-        );
+        assert_eq!(order_book.asks.len(), 0);
         assert_eq!(
             order_book
                 .bids
@@ -822,6 +825,7 @@ mod tests {
             id: 1,
             bid_id: bid_id,
             ask_id: ask_id,
+            bid_price: dec!(1200.2134),
             ask_price: dec!(1500),
             matched_at: Local::now(),
         }));
@@ -829,7 +833,7 @@ mod tests {
         let err = result.unwrap_err();
 
         assert_eq!(err.kind(), ErrorKind::NotFound);
-        assert_eq!(err.to_string(), "Unable to find price level on bid side");
+        assert_eq!(err.to_string(), "Unable to find price level on ask side");
     }
 
     #[test]
@@ -862,6 +866,7 @@ mod tests {
             id: 1,
             bid_id: bid_id,
             ask_id: ask_id,
+            bid_price: dec!(1200.2134),
             ask_price: dec!(1200.2134),
             matched_at: Local::now(),
         }));
@@ -873,11 +878,6 @@ mod tests {
             err.to_string(),
             "Invalid order state. Bid: Fulfilled; Ask: Open"
         );
-    }
-
-    #[test]
-    fn process_match_price_level_removed() {
-        panic!()
     }
 
     #[test]
